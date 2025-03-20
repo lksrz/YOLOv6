@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 import math
 import torch
-from torch.cuda import amp
+from torch import amp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 
