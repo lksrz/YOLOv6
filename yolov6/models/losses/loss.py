@@ -187,7 +187,7 @@ class ComputeLoss:
     def bbox_decode(self, anchor_points, pred_dist):
         if self.use_dfl:
             batch_size, n_anchors, _ = pred_dist.shape
-            pred_dist = F.softmax(pred_dist.view(batch_size, n_anchors, 4, self.reg_max + 1), dim=-1).matmul(self.proj.to(pred_dist.device))
+            pred_dist = F.softmax(pred_dist.view(batch_size, n_anchors, 4, self.reg_max + 1), dim=-1).matmul(self.proj)
         return dist2bbox(pred_dist, anchor_points)
 
 
@@ -198,7 +198,7 @@ class VarifocalLoss(nn.Module):
     def forward(self, pred_score,gt_score, label, alpha=0.75, gamma=2.0):
 
         weight = alpha * pred_score.pow(gamma) * (1 - label) + gt_score * label
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.amp.autocast(device_type='cuda', enabled=False):
             loss = (F.binary_cross_entropy(pred_score.float(), gt_score.float(), reduction='none') * weight).sum()
 
         return loss

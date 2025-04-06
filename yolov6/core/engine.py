@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 import math
 import torch
-from torch.cuda import amp
+from torch import amp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 
@@ -152,7 +152,7 @@ class Trainer:
             write_tbimg(self.tblogger, self.vis_train_batch, self.step + self.max_stepnum * self.epoch, type='train')
 
         # forward
-        with amp.autocast(enabled=self.device != 'cpu'):
+        with amp.autocast(device_type='cuda', enabled=self.device != 'cpu'):
             _, _, batch_height, batch_width = images.shape
             # torch.cuda.synchronize()
             # qq2 = time.time()
@@ -285,12 +285,13 @@ class Trainer:
 
 
     def before_train_loop(self):
+        # torch.autograd.set_detect_anomaly(True)
         LOGGER.info('Training start...')
         self.start_time = time.time()
         self.warmup_stepnum = max(round(self.cfg.solver.warmup_epochs * self.max_stepnum), 1000) if self.args.quant is False else 0
         self.scheduler.last_epoch = self.start_epoch - 1
         self.last_opt_step = -1
-        self.scaler = amp.GradScaler(enabled=self.device != 'cpu')
+        self.scaler = amp.GradScaler('cuda', enabled=self.device != 'cpu')
 
         self.best_ap, self.ap = 0.0, 0.0
         self.best_stop_strong_aug_ap = 0.0
@@ -340,6 +341,21 @@ class Trainer:
                                                         distill_weight = self.cfg.model.head.distill_weight,
                                                         distill_feat = self.args.distill_feat,
                                                         )
+
+        # Transforms
+        # Setup tqdm process bar
+        self.pbar = tqdm(enumerate(self.train_loader), total=self.max_stepnum, ncols=NCOLS,
+                         bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')
+
+        # Model initial
+        self.model.nc = self.data_dict['nc']  # attach number of classes to model
+        self.model.names = self.data_dict['names']  # attach class names to model
+        self.model.args = self.args  # attach hyperparameters to model
+
+        self.before_iter_start_time = time.time()
+        self.iter_data_times = []
+        self.iter_train_times = []
+        # self.model.eval()
 
     def before_epoch(self):
         #stop strong aug like mosaic and mixup from last n epoch by recreate dataloader
